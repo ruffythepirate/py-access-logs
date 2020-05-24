@@ -7,7 +7,7 @@ def ensure_purpose_bucket(purpose):
         add_tag_to_bucket('dev-blog.net', 'purpose', purpose)
 
 def create_athena_bucket():
-    s3.
+    
     print('bam')
 
 def get_bucket_with_tag(tagKey, tagValue):
