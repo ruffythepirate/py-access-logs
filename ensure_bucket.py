@@ -1,13 +1,28 @@
 import boto3
 s3 = boto3.resource('s3')
 
-def ensure_purpose_bucket(purpose):
-    devBlog = get_bucket_with_tag('purpose', purpose)
+def ensure_purpose_bucket(purpose): devBlog = get_bucket_with_tag('purpose', purpose)
     if devBlog is None:
         add_tag_to_bucket('dev-blog.net', 'purpose', purpose)
 
 def create_athena_bucket():
-    
+    # Properties that are desired: Retention time of 1 day
+    # Random name after athena-results-
+    # Private bucket, Athena should be allowed to write to it.
+    # Tagged with purpose Athena
+    # Region, use the default region of configuration
+    import uuid
+
+    new_bucket = s3.Bucket('athena-results-' + uuid.uuid1().hex[0:8])
+
+    result = new_bucket.create(
+        ACL = 'private',
+        CreateBucketConfiguration={
+            'LocationConstraint': 'eu-west-1'
+        },
+        ObjectLockEnabledForBucket=False
+    )
+
     print('bam')
 
 def get_bucket_with_tag(tagKey, tagValue):
