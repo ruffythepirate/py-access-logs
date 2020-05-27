@@ -1,21 +1,26 @@
 import boto3
-s3 = boto3.resource('s3')
+from botocore.exceptions import ClientError
 
-def ensure_purpose_bucket(purpose): devBlog = get_bucket_with_tag('purpose', purpose)
-    if devBlog is None:
-        add_tag_to_bucket('dev-blog.net', 'purpose', purpose)
+_s3 = boto3.resource('s3')
+
+def ensure_athena_bucket():
+    existing_bucket = _get_bucket_with_tag('purpose', 'athena')
+    if(existing_bucket is None):
+        print('No bucket found tagged with purpose athena, creating bucket...')
+        return create_athena_bucket()
+    print('Athena bucket already exists, returning bucket %s' % (existing_bucket.name))
+    return existing_bucket
 
 def create_athena_bucket():
-    # Properties that are desired: Retention time of 1 day
-    # Random name after athena-results-
-    # Private bucket, Athena should be allowed to write to it.
-    # Tagged with purpose Athena
-    # Region, use the default region of configuration
+    # x Properties that are desired: Retention time of 1 day
+    # x Random name after athena-results-
+    # x Private bucket, Athena should be allowed to write to it.
+    # x Tagged with purpose Athena
     import uuid
 
-    new_bucket = s3.Bucket('athena-results-' + uuid.uuid1().hex[0:8])
+    new_bucket = _s3.Bucket('athena-results-' + uuid.uuid1().hex[0:8])
 
-    result = new_bucket.create(
+    location = new_bucket.create(
         ACL = 'private',
         CreateBucketConfiguration={
             'LocationConstraint': 'eu-west-1'
@@ -23,30 +28,80 @@ def create_athena_bucket():
         ObjectLockEnabledForBucket=False
     )
 
-    print('bam')
+    print('created bucket %s' % (new_bucket.name))
 
-def get_bucket_with_tag(tagKey, tagValue):
-    for bucket in s3.buckets.all():
-        tags = s3.BucketTagging(bucket.name)
-        for dict in tags.tag_set:
-            if dict['Key'] == tagKey and dict['Value'] == tagValue:
-                return bucket
+    set_retention_lifecycle_configuration(new_bucket.name)
 
-def add_tag_to_bucket(bucketName, tagKey, tagValue):
-    tagging = s3.BucketTagging(bucketName)
-    tagging.tag_set.append({"Key": tagKey, "Value": tagValue})
-    tagging.put(Tagging={
-            'TagSet': tagging.tag_set
+    add_tag_to_bucket(new_bucket.name, 'purpose', 'athena')
+
+def set_retention_lifecycle_configuration(bucket_name):
+    print('setting lifecycle configuration for %s' % (bucket_name))
+    bucket = _s3.Bucket(bucket_name)
+    bucket.LifecycleConfiguration().put(
+        LifecycleConfiguration= {
+            'Rules': [
+                {
+                    'Expiration': {
+                        'Days': 2
+                    },
+                    'Filter': {
+                        'Prefix': '/'
+                    },
+                    'ID': 'athena-retention',
+                    'Status': 'Enabled',
+                    'AbortIncompleteMultipartUpload': {
+                        'DaysAfterInitiation': 1
+                    }
+                }
+            ]
         }
     )
+    print('created lifecycle configuration for bucket %s' % (bucket.name))
+
+
+
+def _get_bucket_with_tag(tagKey, tagValue):
+    for bucket in _s3.buckets.all():
+        try:
+            tags = _s3.BucketTagging(bucket.name)
+            for dict in tags.tag_set:
+                if dict['Key'] == tagKey and dict['Value'] == tagValue:
+                    return bucket
+        except:
+            e = sys.exc_info()[0]
+            print('Failed for bucket %s with exception %s' % (bucket.name, e))
+
+
+def add_tag_to_bucket(bucketName, tagKey, tagValue):
+    print('adding purpose tag to bucket %s' % (bucketName))
+    tag_set = []
+    tagging = _s3.BucketTagging(bucketName)
+    try:
+        tag_set = tagging.tag_set
+    except ClientError:
+        pass
+    if not contains_purpose(tag_set, 'athena'):
+        tag_set.append({"Key": tagKey, "Value": tagValue})
+        tagging.put(Tagging={
+                'TagSet': tag_set
+            }
+        )
+        print('added purpose tag "athena" for bucket %s' % (bucket.name))
+    else:
+        print('purpose already existed!')
+
+def contains_purpose(tag_set, purpose):
+    for dict in tag_set:
+        if dict['Key'] == 'purpose' and dict['Value'] == purpose:
+            return True
+    return False
 
 def main():
-    ensure_purpose_bucket('dev-blog.net')
-    bucket = get_bucket_with_tag('purpose', 'dev-blog.net')
+    bucket = ensure_athena_bucket()
     if bucket is not None:
-        print('found bucket! ' + bucket.name)
+        print('Bucket found or created!' + bucket.name)
     else:
-        print('still cant find tagged bucket :(')
+        print('Bucket still not there, seems like a bug :(')
 
 if __name__ == "__main__":
     main()
