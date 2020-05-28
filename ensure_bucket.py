@@ -11,6 +11,12 @@ def ensure_athena_bucket():
     print('Athena bucket already exists, returning bucket %s' % (existing_bucket.name))
     return existing_bucket
 
+
+def get_output_location():
+    athena_bucket = ensure_athena_bucket()
+    print(athena_bucket)
+    return 's3://%s/' % (athena_bucket.name)
+
 def create_athena_bucket():
     # x Properties that are desired: Retention time of 1 day
     # x Random name after athena-results-

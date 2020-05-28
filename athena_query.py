@@ -1,39 +1,64 @@
 import boto3
-athena = boto3.client('athena')
+_athena = boto3.client('athena')
 
+_access_log_query = """select date, request_ip, user_agent, uri, count(*) as num
+                    from cloudfront_logs
+                    where status = 200
+                        AND uri <> '/css/an-old-hope.css'
+                        AND user_agent NOT IN('Sogou%20web%20spider/4.0(+http://www.sogou.com/docs/help/webmasters.htm%2307)')
+                    group by date, request_ip, user_agent, uri"""
 
-def start_query(query):
-    return athena.start_query_execution(
+def run_access_log_query():
+    query_id = start_query(_access_log_query)
+    _wait_for_query(query_id)
+    return query_id
+
+def run_query(query):
+    query_id = start_query( query)
+    _wait_for_query(query_id)
+    return query_id
+
+def start_query( query, database = 'default'):
+    import uuid
+    from ensure_bucket import get_output_location
+    output_location = get_output_location()
+    return _athena.start_query_execution(
         QueryString=query,
-        ClientRequestToken='local-tes1'*4,
+        ClientRequestToken=uuid.uuid1().hex,
         QueryExecutionContext = {
-            'Database':'default'
+            'Database':database
         },
         ResultConfiguration = {
-            'OutputLocation': 's3://athena-access-logs-athenaqueryresults-11d2eczrmrqf4/'
+            'OutputLocation': output_location
         },
         WorkGroup='primary'
     )['QueryExecutionId']
 
-def run_access_log_query():
-    queryExecutionId = start_query("select date, request_ip, user_agent, uri, count(*) as num from cloudfront_logs where status = 200 AND uri <> '/css/an-old-hope.css' AND user_agent NOT IN('Sogou%20web%20spider/4.0(+http://www.sogou.com/docs/help/webmasters.htm%2307)') group by date, request_ip, user_agent, uri")
-    return queryExecutionId
+def _wait_for_query(query_id, max_wait_time = 10):
+    from time import sleep
+    state = 'RUNNING'
+    wait_time = 0
+    while state == 'RUNNING' and wait_time < max_wait_time:
+        exec_info = _athena.get_query_execution(QueryExecutionId = query_id)['QueryExecution']
+        state = exec_info['Status']['State']
+        sleep(1)
+        wait_time = wait_time + 1
+
+    if state == 'RUNNING':
+        raise('Query is still running, but timeout time reached (%s s)' % (max_wait_time))
+    return  state
+
+
 
 def main():
-    queryExecutionId = run_access_log_query()
-
-    get_query_execution(queryExecutionId)
-    result = get_query_result(queryExecutionId)
-    print(result['ResultSet']['Rows'][0])
-    print(result['ResultSet']['Rows'][1])
-
+    print('main')
 
 def get_query_result(queryExecutionId):
-    result = athena.get_query_results(QueryExecutionId = queryExecutionId)
+    result = _athena.get_query_results(QueryExecutionId = queryExecutionId)
     return result
 
 def get_query_execution(queryId):
-    execution = athena.get_query_execution(QueryExecutionId = queryId)
+    execution = _athena.get_query_execution(QueryExecutionId = queryId)
     return execution
 
 def extract_column_definitions(result):
