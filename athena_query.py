@@ -34,13 +34,14 @@ def start_query( query, database = 'default'):
         WorkGroup='primary'
     )['QueryExecutionId']
 
-def _wait_for_query(query_id, max_wait_time = 10):
+def _wait_for_query(query_id, max_wait_time = 20):
     from time import sleep
     state = 'RUNNING'
     wait_time = 0
-    while state == 'RUNNING' and wait_time < max_wait_time:
+    while (state == 'RUNNING' or state == 'QUEUED') and wait_time < max_wait_time:
         exec_info = _athena.get_query_execution(QueryExecutionId = query_id)['QueryExecution']
         state = exec_info['Status']['State']
+        print('State is now: ', state)
         sleep(1)
         wait_time = wait_time + 1
 

@@ -11,10 +11,10 @@ def get_result_generator(query_id):
     while should_continue:
         for row in rows:
             yield create_result(columns_row, row)
-        next_token = result['NextToken']
-        if next_token is not None:
-            result = _query_next(query_id, next_token)
-        should_continue = next_token is not None
+        if 'NextToken' in result:
+            result = _query_next(query_id, result['NextToken'])
+        else:
+            should_continue = False
 
 
 def _query_next(query_id, token=None):
