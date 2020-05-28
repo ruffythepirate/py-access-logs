@@ -32,7 +32,7 @@ def create_athena_bucket():
 
     set_retention_lifecycle_configuration(new_bucket.name)
 
-    add_tag_to_bucket(new_bucket.name, 'purpose', 'athena')
+    add_purpose_to_bucket(new_bucket.name, 'athena')
 
 def set_retention_lifecycle_configuration(bucket_name):
     print('setting lifecycle configuration for %s' % (bucket_name))
@@ -72,7 +72,7 @@ def _get_bucket_with_tag(tagKey, tagValue):
             print('Failed for bucket %s with exception %s' % (bucket.name, e))
 
 
-def add_tag_to_bucket(bucketName, tagKey, tagValue):
+def add_purpose_to_bucket(bucketName, tagValue):
     print('adding purpose tag to bucket %s' % (bucketName))
     tag_set = []
     tagging = _s3.BucketTagging(bucketName)
@@ -81,14 +81,14 @@ def add_tag_to_bucket(bucketName, tagKey, tagValue):
     except ClientError:
         pass
     if not contains_purpose(tag_set, 'athena'):
-        tag_set.append({"Key": tagKey, "Value": tagValue})
+        tag_set.append({"Key": 'purpose', "Value": tagValue})
         tagging.put(Tagging={
                 'TagSet': tag_set
             }
         )
         print('added purpose tag "athena" for bucket %s' % (bucket.name))
     else:
-        print('purpose already existed!')
+        print('purpose already exists! doing nothing.')
 
 def contains_purpose(tag_set, purpose):
     for dict in tag_set:
